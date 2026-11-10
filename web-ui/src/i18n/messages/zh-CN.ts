@@ -202,6 +202,7 @@ const zhCN = {
       curated: '精选',
       strongRecommend: '强烈推荐',
       notRecommended: '不建议购买',
+      analysisFailed: '分析失败',
       pending: '待观察',
       analyzing: 'AI 正在分析该商品的潜在价值...',
       collapse: '收起详情',

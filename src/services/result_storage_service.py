@@ -26,6 +26,18 @@ SORT_COLUMN_MAP = {
 }
 
 
+# 旧版缺少提示词的记录只有 reason，其余分析失败已有 error 字段。
+_RETRYABLE_AI_FAILURE = """
+    status = 'active'
+    AND is_recommended = 0
+    AND COALESCE(analysis_source, '') = 'ai'
+    AND (
+        COALESCE(json_extract(raw_json, '$.ai_analysis.error'), '') <> ''
+        OR COALESCE(json_extract(raw_json, '$.ai_analysis.reason'), '') = '任务未配置AI prompt，跳过分析。'
+    )
+"""
+
+
 def _get_link_unique_key(link: str) -> str:
     return link.split("&", 1)[0]
 
@@ -164,13 +176,29 @@ def _save_result_record_sync(record: dict, keyword: str) -> bool:
         keyword_hit_count = 0
 
     with sqlite_connection() as conn:
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO result_items (
+        cursor = conn.execute(
+            f"""
+            INSERT INTO result_items (
                 result_filename, keyword, task_name, crawl_time, publish_time, price,
                 price_display, item_id, title, link, link_unique_key, seller_nickname,
                 is_recommended, analysis_source, keyword_hit_count, raw_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(result_filename, link_unique_key) DO UPDATE SET
+                keyword = excluded.keyword,
+                task_name = excluded.task_name,
+                crawl_time = excluded.crawl_time,
+                publish_time = excluded.publish_time,
+                price = excluded.price,
+                price_display = excluded.price_display,
+                item_id = excluded.item_id,
+                title = excluded.title,
+                link = excluded.link,
+                seller_nickname = excluded.seller_nickname,
+                is_recommended = excluded.is_recommended,
+                analysis_source = excluded.analysis_source,
+                keyword_hit_count = excluded.keyword_hit_count,
+                raw_json = excluded.raw_json
+            WHERE {_RETRYABLE_AI_FAILURE}
             """,
             (
                 build_result_filename(keyword),
@@ -192,7 +220,7 @@ def _save_result_record_sync(record: dict, keyword: str) -> bool:
             ),
         )
         conn.commit()
-    return True
+        return cursor.rowcount == 1
 
 
 def load_processed_link_keys(keyword: str) -> set[str]:
@@ -200,7 +228,10 @@ def load_processed_link_keys(keyword: str) -> set[str]:
     filename = build_result_filename(keyword)
     with sqlite_connection() as conn:
         rows = conn.execute(
-            "SELECT link_unique_key FROM result_items WHERE result_filename = ?",
+            f"""
+            SELECT link_unique_key FROM result_items
+            WHERE result_filename = ? AND NOT ({_RETRYABLE_AI_FAILURE})
+            """,
             (filename,),
         ).fetchall()
     return {str(row["link_unique_key"]) for row in rows if row["link_unique_key"]}

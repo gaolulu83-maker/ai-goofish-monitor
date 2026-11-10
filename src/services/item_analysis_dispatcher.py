@@ -76,7 +76,7 @@ class ItemAnalysisDispatcher:
         record["ai_analysis"] = await self._build_analysis_result(job, record)
         if await self._saver(record, job.keyword):
             self.completed_count += 1
-        await self._notify_if_recommended(item_data, record["ai_analysis"])
+            await self._notify_if_recommended(item_data, record["ai_analysis"])
 
     async def _load_seller_info(self, job: ItemAnalysisJob) -> dict:
         seller_info = {}
@@ -116,8 +116,7 @@ class ItemAnalysisDispatcher:
             "reason": reason,
             "keyword_hit_count": 0,
         }
-        if error:
-            payload["error"] = error
+        payload["error"] = error or reason
         return payload
 
     async def _run_ai_analysis(self, job: ItemAnalysisJob, record: dict) -> dict:

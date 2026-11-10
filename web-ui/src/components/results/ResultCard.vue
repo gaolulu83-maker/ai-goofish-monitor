@@ -30,6 +30,9 @@ const priceInsight = props.item.price_insight
 
 const isRecommended = ai?.is_recommended === true
 const recommendationStatus = computed(() => {
+  const analysisFailed = ai?.is_recommended === false && ai.analysis_source === 'ai'
+    && (ai.error || ai.reason === '任务未配置AI prompt，跳过分析。')
+  if (analysisFailed) return { label: t('results.card.analysisFailed'), color: 'bg-amber-500', icon: AlertCircle, text: 'text-amber-600', bg: 'bg-amber-50' }
   if (ai?.is_recommended === true) return { label: t('results.card.strongRecommend'), color: 'bg-emerald-500', icon: CheckCircle2, text: 'text-emerald-600', bg: 'bg-emerald-50' }
   if (ai?.is_recommended === false) return { label: t('results.card.notRecommended'), color: 'bg-rose-500', icon: XCircle, text: 'text-rose-600', bg: 'bg-rose-50' }
   return { label: t('results.card.pending'), color: 'bg-amber-500', icon: AlertCircle, text: 'text-amber-600', bg: 'bg-amber-50' }
